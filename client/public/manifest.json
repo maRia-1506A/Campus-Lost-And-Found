@@ -1,0 +1,16 @@
+{
+  "short_name": "UniFind",
+  "name": "UniFind — Campus Lost & Found",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "48x48 72x72 96x96 128x128 256x256 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#F4EDE3",
+  "theme_color": "#F4EDE3",
+  "display": "standalone"
+}

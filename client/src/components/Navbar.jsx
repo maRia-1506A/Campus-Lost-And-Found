@@ -23,7 +23,9 @@ export default function Navbar({ onCreatePost }) {
     <header className="navbar">
       <div className="navbar-inner">
         <Link to="/" className="navbar-brand">
-          <span className="brand-badge">U</span>
+          <span className="brand-badge">
+            <img src="/favicon.svg" alt="UniFind Logo" className="brand-logo-img" />
+          </span>
           <span className="brand-text">
             <strong>UniFind</strong>
             <span>Campus Lost &amp; Found</span>
