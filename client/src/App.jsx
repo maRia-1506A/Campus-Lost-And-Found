@@ -4,6 +4,7 @@ import Navbar from "./components/Navbar.jsx";
 import Feed from "./pages/Feed.jsx";
 import PostDetailPage from "./pages/PostDetailPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
+import InboxPage from "./pages/InboxPage.jsx";
 import Footer from "./components/Footer.jsx";
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/post/:id" element={<PostDetailPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/profile/:userId" element={<ProfilePage />} />
+          <Route path="/messages" element={<InboxPage />} />
           <Route path="*" element={<Feed composerSignal={composerSignal} />} />
         </Routes>
       </main>

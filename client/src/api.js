@@ -128,7 +128,7 @@ export async function deletePost(id) {
 /**
  * Toggle a like for a post. Returns { likes: number, liked: boolean }.
  */
-export async function toggleLike(postId, userId) {
+export async function toggleLike(postId, userId, userObj = null) {
   const { data: existing } = await supabase
     .from("likes")
     .select("id")
@@ -148,6 +148,23 @@ export async function toggleLike(postId, userId) {
       .from("likes")
       .insert({ post_id: postId, user_id: userId });
     handleError(error);
+
+    // Notify post owner
+    try {
+      const { data: post } = await supabase.from("posts").select("author_id, title").eq("id", postId).maybeSingle();
+      if (post && post.author_id && post.author_id !== userId) {
+        await createNotification({
+          userId: post.author_id,
+          actorId: userId,
+          actorName: userObj?.name || "Someone",
+          actorAvatar: userObj?.avatar || "",
+          type: "like",
+          postId,
+          title: "New Like on your post",
+          message: `liked your post "${post.title}"`,
+        });
+      }
+    } catch {}
   }
 
   const { count, error: countErr } = await supabase
@@ -193,6 +210,24 @@ export async function addComment(postId, { text, authorName, authorInitials, aut
     .single();
 
   handleError(error);
+
+  // Notify post owner
+  try {
+    const { data: post } = await supabase.from("posts").select("author_id, title").eq("id", postId).maybeSingle();
+    if (post && post.author_id && post.author_id !== userId) {
+      await createNotification({
+        userId: post.author_id,
+        actorId: userId,
+        actorName: authorName || "Someone",
+        actorAvatar: authorAvatar || "",
+        type: "comment",
+        postId,
+        title: "New Comment on your post",
+        message: `commented on "${post.title}": "${text.trim().slice(0, 50)}${text.length > 50 ? "…" : ""}"`,
+      });
+    }
+  } catch {}
+
   return normalizeComment(data);
 }
 
@@ -332,3 +367,247 @@ function normalizeComment(row) {
     createdAt: row.created_at,
   };
 }
+
+// ── Messaging ────────────────────────────────────────────────
+
+/**
+ * Find or create a conversation between two users for a specific post.
+ * participant_a = the claimant (current user)
+ * participant_b = the post author
+ */
+export async function getOrCreateConversation(postId, participantA, participantB) {
+  // Try to find existing
+  const { data: existing } = await supabase
+    .from("conversations")
+    .select("*")
+    .eq("post_id", postId)
+    .eq("participant_a", participantA)
+    .eq("participant_b", participantB)
+    .maybeSingle();
+
+  if (existing) return existing;
+
+  // Create new
+  const { data, error } = await supabase
+    .from("conversations")
+    .insert({ post_id: postId, participant_a: participantA, participant_b: participantB })
+    .select()
+    .single();
+
+  handleError(error);
+  return data;
+}
+
+/**
+ * Fetch all messages for a conversation, oldest first.
+ */
+export async function fetchMessages(conversationId) {
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true });
+
+  handleError(error);
+  return data || [];
+}
+
+/**
+ * Send a message in a conversation.
+ */
+export async function sendMessage(conversationId, senderId, senderName, senderAvatar, text) {
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      conversation_id: conversationId,
+      sender_id: senderId,
+      sender_name: senderName || "User",
+      sender_avatar: senderAvatar || "",
+      text: text.trim(),
+    })
+    .select()
+    .single();
+
+  handleError(error);
+
+  // Notify recipient
+  try {
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("participant_a, participant_b, post_id, posts(title)")
+      .eq("id", conversationId)
+      .maybeSingle();
+
+    if (conv) {
+      const recipientId = conv.participant_a === senderId ? conv.participant_b : conv.participant_a;
+      await createNotification({
+        userId: recipientId,
+        actorId: senderId,
+        actorName: senderName || "Someone",
+        actorAvatar: senderAvatar || "",
+        type: "message",
+        postId: conv.post_id,
+        title: "New Message",
+        message: `sent you a message regarding "${conv.posts?.title || "a post"}": "${text.trim().slice(0, 50)}${text.length > 50 ? "…" : ""}"`,
+      });
+    }
+  } catch {}
+
+  return data;
+}
+
+/**
+ * Fetch all conversations where the user is a participant.
+ * Enriches each conversation with the post title and the other user's name.
+ */
+export async function fetchMyConversations(userId) {
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("*, posts(title, type, author_name)")
+    .or(`participant_a.eq.${userId},participant_b.eq.${userId}`)
+    .order("created_at", { ascending: false });
+
+  handleError(error);
+  if (!data || data.length === 0) return [];
+
+  // For each conversation, fetch the latest message
+  const results = await Promise.all(
+    data.map(async (conv) => {
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", conv.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const lastMsg = msgs?.[0] || null;
+      const isParticipantA = conv.participant_a === userId;
+
+      // Count unread messages for this user
+      const readField = isParticipantA ? "read_by_a" : "read_by_b";
+      const { count: unreadCount } = await supabase
+        .from("messages")
+        .select("*", { count: "exact", head: true })
+        .eq("conversation_id", conv.id)
+        .eq(readField, false)
+        .neq("sender_id", userId);
+
+      return {
+        ...conv,
+        postTitle: conv.posts?.title || "Unknown Post",
+        postType: conv.posts?.type || "lost",
+        lastMessage: lastMsg,
+        unreadCount: unreadCount || 0,
+        isParticipantA,
+      };
+    })
+  );
+
+  return results;
+}
+
+/**
+ * Mark all messages in a conversation as read for the given user.
+ */
+export async function markMessagesRead(conversationId, userId, isParticipantA) {
+  const readField = isParticipantA ? "read_by_a" : "read_by_b";
+  const { error } = await supabase
+    .from("messages")
+    .update({ [readField]: true })
+    .eq("conversation_id", conversationId)
+    .neq("sender_id", userId);
+
+  handleError(error);
+}
+
+/**
+ * Get total unread message count for a user (for navbar badge).
+ */
+export async function fetchUnreadCount(userId) {
+  const { data: convs } = await supabase
+    .from("conversations")
+    .select("id, participant_a, participant_b")
+    .or(`participant_a.eq.${userId},participant_b.eq.${userId}`);
+
+  if (!convs || convs.length === 0) return 0;
+
+  let total = 0;
+  for (const conv of convs) {
+    const isParticipantA = conv.participant_a === userId;
+    const readField = isParticipantA ? "read_by_a" : "read_by_b";
+    const { count } = await supabase
+      .from("messages")
+      .select("*", { count: "exact", head: true })
+      .eq("conversation_id", conv.id)
+      .eq(readField, false)
+      .neq("sender_id", userId);
+    total += count || 0;
+  }
+  return total;
+}
+
+// ── Notifications ──────────────────────────────────────────
+
+/**
+ * Create a notification for a user.
+ */
+export async function createNotification({ userId, actorId, actorName, actorAvatar, type, postId, title, message }) {
+  if (!userId || userId === actorId) return; // Don't notify oneself or empty user
+  try {
+    await supabase.from("notifications").insert({
+      user_id: userId,
+      actor_id: actorId || null,
+      actor_name: actorName || "Someone",
+      actor_avatar: actorAvatar || "",
+      type,
+      post_id: postId || null,
+      title: title || "",
+      message: message || "",
+    });
+  } catch (err) {
+    console.error("Failed to create notification:", err);
+  }
+}
+
+/**
+ * Fetch notifications for a user, ordered newest first.
+ */
+export async function fetchNotifications(userId) {
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  handleError(error);
+  return data || [];
+}
+
+/**
+ * Mark a single notification or all notifications as read for a user.
+ */
+export async function markNotificationsRead(userId, notificationId = null) {
+  let query = supabase.from("notifications").update({ is_read: true }).eq("user_id", userId);
+  if (notificationId) {
+    query = query.eq("id", notificationId);
+  }
+  const { error } = await query;
+  handleError(error);
+}
+
+/**
+ * Get count of unread notifications for a user.
+ */
+export async function fetchUnreadNotificationCount(userId) {
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("is_read", false);
+
+  handleError(error);
+  return count || 0;
+}
+
+

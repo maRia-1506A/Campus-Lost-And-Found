@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { fetchPost, updatePostStatus, deletePost, toggleLike } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import CommentSection from "../components/CommentSection.jsx";
+import ChatDrawer from "../components/ChatDrawer.jsx";
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -24,6 +25,7 @@ export default function PostDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Like state — seeded from post.liked / post.likes after load
   const [likes, setLikes] = useState(0);
@@ -58,7 +60,7 @@ export default function PostDetailPage() {
     setLiked(!wasLiked);
     setLikes((prev) => (wasLiked ? prev - 1 : prev + 1));
     try {
-      const result = await toggleLike(id, user.id);
+      const result = await toggleLike(id, user.id, user);
       setLikes(result.likes);
       setLiked(result.liked);
     } catch {
@@ -255,6 +257,24 @@ export default function PostDetailPage() {
             <p>No contact info listed. Check back soon.</p>
           )}
           {copyMessage && <p className="copy-feedback">{copyMessage}</p>}
+
+          {/* Message Owner button — hidden for the post owner themselves */}
+          {post.authorId && user.id !== post.authorId && (
+            user.isAuthenticated ? (
+              <button
+                className="btn btn-primary"
+                type="button"
+                style={{ marginTop: "12px", width: "100%" }}
+                onClick={() => setChatOpen(true)}
+              >
+                💬 Message {post.authorName || "Owner"} privately
+              </button>
+            ) : (
+              <p className="chat-signin-prompt">
+                🔐 <Link to="/" onClick={(e) => { e.preventDefault(); }}>Sign in with Google</Link> to send a private message to the owner.
+              </p>
+            )
+          )}
         </div>
 
         {/* ── Admin actions ── */}
@@ -285,6 +305,14 @@ export default function PostDetailPage() {
           />
         </section>
       </article>
+
+      {/* ── Chat drawer ── */}
+      {chatOpen && (
+        <ChatDrawer
+          post={post}
+          onClose={() => setChatOpen(false)}
+        />
+      )}
     </div>
   );
 }

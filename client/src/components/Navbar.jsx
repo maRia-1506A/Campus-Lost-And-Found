@@ -1,10 +1,87 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import { fetchUnreadCount, fetchNotifications, markNotificationsRead, fetchUnreadNotificationCount } from "../api.js";
+
+function timeAgo(dateStr) {
+  if (!dateStr) return "";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return new Date(dateStr).toLocaleDateString([], { month: "short", day: "numeric" });
+}
 
 export default function Navbar({ onCreatePost }) {
   const { user, signInWithGoogle, signOut } = useAuth();
+  const navigate = useNavigate();
   const [authError, setAuthError] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
+  
+  // Notifications state
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const loadNotifData = () => {
+    if (!user.isAuthenticated) return;
+    fetchUnreadNotificationCount(user.id).then(setUnreadNotifCount).catch(() => {});
+  };
+
+  useEffect(() => {
+    if (!user.isAuthenticated) return;
+    fetchUnreadCount(user.id).then(setUnreadCount).catch(() => {});
+    loadNotifData();
+
+    // Poll every 20s
+    const interval = setInterval(() => {
+      fetchUnreadCount(user.id).then(setUnreadCount).catch(() => {});
+      loadNotifData();
+    }, 20000);
+
+    return () => clearInterval(interval);
+  }, [user.id, user.isAuthenticated]);
+
+  // Click outside to close notification dropdown
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowNotifMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleOpenNotifications = async () => {
+    if (!showNotifMenu) {
+      try {
+        const notifs = await fetchNotifications(user.id);
+        setNotifications(notifs);
+        setShowNotifMenu(true);
+        if (unreadNotifCount > 0) {
+          await markNotificationsRead(user.id);
+          setUnreadNotifCount(0);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      setShowNotifMenu(false);
+    }
+  };
+
+  const handleNotificationClick = (notif) => {
+    setShowNotifMenu(false);
+    if (notif.type === "message") {
+      navigate("/messages");
+    } else if (notif.post_id) {
+      navigate(`/post/${notif.post_id}`);
+    }
+  };
 
   async function handleSignIn() {
     setAuthError("");
@@ -40,6 +117,63 @@ export default function Navbar({ onCreatePost }) {
           )}
           {user.isAuthenticated ? (
             <div className="user-profile-menu">
+              {/* Notification Bell */}
+              <div className="notif-dropdown-wrapper" ref={dropdownRef}>
+                <button
+                  type="button"
+                  className="navbar-inbox-btn"
+                  title="Notifications"
+                  aria-label="Notifications"
+                  onClick={handleOpenNotifications}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                  {unreadNotifCount > 0 && (
+                    <span className="navbar-inbox-badge">{unreadNotifCount > 9 ? "9+" : unreadNotifCount}</span>
+                  )}
+                </button>
+
+                {showNotifMenu && (
+                  <div className="notif-popover">
+                    <div className="notif-popover-header">
+                      <span>🔔 Notifications</span>
+                    </div>
+                    <div className="notif-popover-body">
+                      {notifications.length === 0 ? (
+                        <div className="notif-empty">No notifications yet</div>
+                      ) : (
+                        notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            className={`notif-item ${!n.is_read ? "notif-item--unread" : ""}`}
+                            onClick={() => handleNotificationClick(n)}
+                          >
+                            <span className="notif-type-icon">
+                              {n.type === "like" ? "❤️" : n.type === "comment" ? "💬" : "📬"}
+                            </span>
+                            <div className="notif-item-text">
+                              <strong>{n.actor_name}</strong> {n.message}
+                              <span className="notif-time">{timeAgo(n.created_at)}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Private Messages Inbox */}
+              <Link to="/messages" className="navbar-inbox-btn" title="Messages" aria-label="Messages">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                {unreadCount > 0 && (
+                  <span className="navbar-inbox-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>
+                )}
+              </Link>
               <Link to={`/profile/${user.id}`} className="user-info user-info-link" title="View your profile">
                 {user.avatar ? (
                   <img

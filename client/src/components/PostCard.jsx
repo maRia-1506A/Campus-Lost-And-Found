@@ -34,7 +34,7 @@ export default function PostCard({ post }) {
     setLiked(!wasLiked);
     setLikes((prev) => (wasLiked ? prev - 1 : prev + 1));
     try {
-      const result = await toggleLike(post.id, user.id);
+      const result = await toggleLike(post.id, user.id, user);
       setLikes(result.likes);
       setLiked(result.liked);
     } catch {
