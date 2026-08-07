@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { fetchUnreadCount, fetchNotifications, markNotificationsRead, fetchUnreadNotificationCount } from "../api.js";
+import { supabase } from "../supabase.js";
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
@@ -33,16 +34,41 @@ export default function Navbar({ onCreatePost }) {
 
   useEffect(() => {
     if (!user.isAuthenticated) return;
-    fetchUnreadCount(user.id).then(setUnreadCount).catch(() => {});
-    loadNotifData();
 
-    // Poll every 20s
+    // Initial load
+    fetchUnreadCount(user.id).then(setUnreadCount).catch(() => {});
+    fetchUnreadNotificationCount(user.id).then(setUnreadNotifCount).catch(() => {});
+
+    // Poll every 30s for message badge
     const interval = setInterval(() => {
       fetchUnreadCount(user.id).then(setUnreadCount).catch(() => {});
-      loadNotifData();
-    }, 20000);
+    }, 30000);
 
-    return () => clearInterval(interval);
+    // Realtime: listen for new notifications for this user
+    if (!supabase) return;
+    const channel = supabase
+      .channel(`notifications:user:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          // Bump badge count
+          setUnreadNotifCount((prev) => prev + 1);
+          // If dropdown is open, prepend new notification
+          setNotifications((prev) => [payload.new, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, [user.id, user.isAuthenticated]);
 
   // Click outside to close notification dropdown
