@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toggleLike } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import CommentSection from "./CommentSection.jsx";
+import { supabase } from "../supabase.js";
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -24,6 +25,29 @@ export default function PostCard({ post }) {
   const [likeBusy, setLikeBusy] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentCount, setCommentCount] = useState(post.commentCount || 0);
+
+  // Realtime: sync like count from other users
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase
+      .channel(`likes:post:${post.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "likes", filter: `post_id=eq.${post.id}` },
+        () => {
+          // Re-fetch like count on any like change
+          supabase
+            .from("likes")
+            .select("*", { count: "exact", head: true })
+            .eq("post_id", post.id)
+            .then(({ count }) => {
+              if (count !== null) setLikes(count);
+            });
+        }
+      )
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [post.id]);
 
   async function handleLike(e) {
     e.preventDefault();

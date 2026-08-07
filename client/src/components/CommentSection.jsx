@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { addComment, fetchComments } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { supabase } from "../supabase.js";
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -26,6 +27,8 @@ export default function CommentSection({ postId, onCountChange }) {
 
   useEffect(() => {
     let cancelled = false;
+
+    // Initial load
     fetchComments(postId)
       .then((data) => {
         if (!cancelled) {
@@ -34,8 +37,43 @@ export default function CommentSection({ postId, onCountChange }) {
         }
       })
       .catch(() => {});
+
+    // Realtime subscription for new comments on this post
+    if (!supabase) return;
+    const channel = supabase
+      .channel(`comments:post:${postId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "comments",
+          filter: `post_id=eq.${postId}`,
+        },
+        (payload) => {
+          const newComment = {
+            id: payload.new.id,
+            postId: payload.new.post_id,
+            userId: payload.new.user_id,
+            text: payload.new.text,
+            authorName: payload.new.author_name,
+            authorInitials: payload.new.author_initials,
+            authorAvatar: payload.new.author_avatar ?? "",
+            createdAt: payload.new.created_at,
+          };
+          setComments((prev) => {
+            if (prev.find((c) => c.id === newComment.id)) return prev;
+            const updated = [...prev, newComment];
+            if (onCountChange) onCountChange(updated.length);
+            return updated;
+          });
+        }
+      )
+      .subscribe();
+
     return () => {
       cancelled = true;
+      supabase.removeChannel(channel);
     };
   }, [postId, onCountChange]);
 
