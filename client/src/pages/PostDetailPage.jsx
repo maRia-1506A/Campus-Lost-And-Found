@@ -273,7 +273,7 @@ export default function PostDetailPage() {
           {post.authorId && user.id !== post.authorId && (
             user.isAuthenticated ? (
               <button
-                className="btn btn-primary"
+                className="btn btn-primary btn-message-owner"
                 type="button"
                 style={{ marginTop: "12px", width: "100%" }}
                 onClick={() => setChatOpen(true)}

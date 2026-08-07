@@ -2817,6 +2817,26 @@ a { color: inherit; text-decoration: none; }
   .post-card-header {
     padding: 12px 14px 8px;
   }
+
+  .notif-popover {
+    position: fixed;
+    top: 56px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: calc(100vw - 24px);
+    z-index: 1000;
+    box-shadow: 0 12px 36px rgba(44, 30, 38, 0.25);
+  }
+}
+
+.btn-message-owner {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.4;
+  padding: 10px 14px;
 }
 
 
