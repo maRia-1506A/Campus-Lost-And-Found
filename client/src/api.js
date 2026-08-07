@@ -376,8 +376,8 @@ function normalizeComment(row) {
  * participant_b = the post author
  */
 export async function getOrCreateConversation(postId, participantA, participantB) {
-  // Try to find existing
-  const { data: existing } = await supabase
+  // Check if conversation exists in either direction
+  const { data: conv1 } = await supabase
     .from("conversations")
     .select("*")
     .eq("post_id", postId)
@@ -385,9 +385,19 @@ export async function getOrCreateConversation(postId, participantA, participantB
     .eq("participant_b", participantB)
     .maybeSingle();
 
-  if (existing) return existing;
+  if (conv1) return conv1;
 
-  // Create new
+  const { data: conv2 } = await supabase
+    .from("conversations")
+    .select("*")
+    .eq("post_id", postId)
+    .eq("participant_a", participantB)
+    .eq("participant_b", participantA)
+    .maybeSingle();
+
+  if (conv2) return conv2;
+
+  // Create new conversation
   const { data, error } = await supabase
     .from("conversations")
     .insert({ post_id: postId, participant_a: participantA, participant_b: participantB })
@@ -492,6 +502,15 @@ export async function fetchMyConversations(userId) {
         .eq(readField, false)
         .neq("sender_id", userId);
 
+      // Determine other participant name
+      let otherName = "";
+      if (lastMsg && lastMsg.sender_id !== userId) {
+        otherName = lastMsg.sender_name;
+      }
+      if (!otherName) {
+        otherName = isParticipantA ? (conv.posts?.author_name || "Post Owner") : "User";
+      }
+
       return {
         ...conv,
         postTitle: conv.posts?.title || "Unknown Post",
@@ -499,6 +518,7 @@ export async function fetchMyConversations(userId) {
         lastMessage: lastMsg,
         unreadCount: unreadCount || 0,
         isParticipantA,
+        otherName,
       };
     })
   );

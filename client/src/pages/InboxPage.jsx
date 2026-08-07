@@ -89,9 +89,10 @@ export default function InboxPage() {
                                     <div className="inbox-item-preview">
                                         {lastMsg ? (
                                             <span className={hasUnread ? "inbox-item-preview--bold" : ""}>
-                                                {lastMsg.sender_id === user.id ? "You: " : ""}{lastMsg.text.slice(0, 80)}{lastMsg.text.length > 80 ? "…" : ""}
+                                                <strong>{conv.otherName ? `${conv.otherName}: ` : ""}{lastMsg.sender_id === user.id ? "(You) " : ""}</strong>
+                                                {lastMsg.text.slice(0, 70)}{lastMsg.text.length > 70 ? "…" : ""}
                                             </span>
-                                        ) : <span className="inbox-item-no-msg">No messages yet — start the conversation</span>}
+                                        ) : <span className="inbox-item-no-msg">No messages yet</span>}
                                         {hasUnread && <span className="inbox-item-unread-dot">{conv.unreadCount}</span>}
                                     </div>
                                 </div>
@@ -102,7 +103,8 @@ export default function InboxPage() {
             )}
             {activeConv && (
                 <ChatDrawer
-                    post={{ id: activeConv.post_id, title: activeConv.postTitle, type: activeConv.postType, authorId: activeConv.participant_b, authorName: activeConv.isParticipantA ? "Post Owner" : "Claimant" }}
+                    initialConversation={activeConv}
+                    post={{ id: activeConv.post_id, title: activeConv.postTitle, type: activeConv.postType }}
                     onClose={() => { setActiveConv(null); load(); }}
                 />
             )}

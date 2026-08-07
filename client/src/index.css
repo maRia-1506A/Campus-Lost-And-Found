@@ -683,7 +683,7 @@ a { color: inherit; text-decoration: none; }
 /* ── Card header ── */
 .post-card-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   padding: 16px 18px 10px;
 }

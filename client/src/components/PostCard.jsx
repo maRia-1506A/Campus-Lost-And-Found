@@ -78,14 +78,6 @@ export default function PostCard({ post }) {
           )}
         </Link>
         <div className="post-meta">
-          <div className="post-meta-row">
-            <span className={`type-badge type-badge--${post.type}`}>
-              {post.type === "lost" ? "🔴 LOST" : "🟢 FOUND"}
-            </span>
-            <span className={`status-pill status-pill--${post.status}`}>
-              {post.status === "resolved" ? "✓ Resolved" : "Open"}
-            </span>
-          </div>
           <span className="time">
             {authorDisplayName ? (
               <Link
@@ -98,6 +90,14 @@ export default function PostCard({ post }) {
             {authorDisplayName ? " · " : ""}
             {timeAgo(post.createdAt)}
           </span>
+          <div className="post-meta-row">
+            <span className={`type-badge type-badge--${post.type}`}>
+              {post.type === "lost" ? "🔴 LOST" : "🟢 FOUND"}
+            </span>
+            <span className={`status-pill status-pill--${post.status}`}>
+              {post.status === "resolved" ? "✓ Resolved" : "Open"}
+            </span>
+          </div>
         </div>
       </header>
 

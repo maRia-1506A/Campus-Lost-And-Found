@@ -72,7 +72,17 @@ export default function PostDetailPage() {
     }
   }
 
+  const isOwner = Boolean(
+    post &&
+      ((post.authorId && user?.id && post.authorId === user.id) ||
+        (!post.authorId &&
+          post.authorName &&
+          user?.name &&
+          post.authorName.toLowerCase() === user.name.toLowerCase()))
+  );
+
   async function handleResolve() {
+    if (!isOwner) return;
     try {
       await updatePostStatus(id, post.status === "open" ? "resolved" : "open");
       load();
@@ -82,6 +92,7 @@ export default function PostDetailPage() {
   }
 
   async function handleDelete() {
+    if (!isOwner) return;
     if (!window.confirm("Delete this post permanently?")) return;
     try {
       await deletePost(id);
@@ -277,21 +288,23 @@ export default function PostDetailPage() {
           )}
         </div>
 
-        {/* ── Admin actions ── */}
-        <div className="detail-actions">
-          <button
-            className={`btn ${
-              post.status === "open" ? "btn-primary" : "btn-ghost"
-            }`}
-            type="button"
-            onClick={handleResolve}
-          >
-            {post.status === "open" ? "Mark as resolved" : "Reopen post"}
-          </button>
-          <button className="btn btn-danger" type="button" onClick={handleDelete}>
-            Delete post
-          </button>
-        </div>
+        {/* ── Admin actions (Owner only) ── */}
+        {isOwner && (
+          <div className="detail-actions">
+            <button
+              className={`btn ${
+                post.status === "open" ? "btn-primary" : "btn-ghost"
+              }`}
+              type="button"
+              onClick={handleResolve}
+            >
+              {post.status === "open" ? "Mark as resolved" : "Reopen post"}
+            </button>
+            <button className="btn btn-danger" type="button" onClick={handleDelete}>
+              Delete post
+            </button>
+          </div>
+        )}
 
         {/* ── Comments section ── */}
         <section className="detail-comments">

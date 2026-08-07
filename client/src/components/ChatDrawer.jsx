@@ -18,9 +18,9 @@ function timeLabel(dateStr) {
     return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export default function ChatDrawer({ post, onClose }) {
+export default function ChatDrawer({ post, initialConversation, onClose }) {
     const { user } = useAuth();
-    const [conversation, setConversation] = useState(null);
+    const [conversation, setConversation] = useState(initialConversation || null);
     const [messages, setMessages] = useState([]);
     const [text, setText] = useState("");
     const [sending, setSending] = useState(false);
@@ -34,15 +34,40 @@ export default function ChatDrawer({ post, onClose }) {
     }, []);
 
     const loadConversation = useCallback(async () => {
-        if (!user.isAuthenticated) { setError("Please sign in to send messages."); setLoading(false); return; }
-        if (!post.authorId) { setError("This post has no registered owner to message."); setLoading(false); return; }
-        if (user.id === post.authorId) { setError("You cannot message yourself."); setLoading(false); return; }
+        if (!user.isAuthenticated) {
+            setError("Please sign in to send messages.");
+            setLoading(false);
+            return;
+        }
+
         try {
             setLoading(true);
-            const conv = await getOrCreateConversation(post.id, user.id, post.authorId);
+            let conv = initialConversation;
+
+            if (!conv && post) {
+                if (!post.authorId) {
+                    setError("This post has no registered owner to message.");
+                    setLoading(false);
+                    return;
+                }
+                if (user.id === post.authorId) {
+                    setError("You are the owner of this post.");
+                    setLoading(false);
+                    return;
+                }
+                conv = await getOrCreateConversation(post.id, user.id, post.authorId);
+            }
+
+            if (!conv) {
+                setError("Conversation not found.");
+                setLoading(false);
+                return;
+            }
+
             setConversation(conv);
             const msgs = await fetchMessages(conv.id);
             setMessages(msgs);
+
             const isA = conv.participant_a === user.id;
             await markMessagesRead(conv.id, user.id, isA);
         } catch (err) {
@@ -50,7 +75,7 @@ export default function ChatDrawer({ post, onClose }) {
         } finally {
             setLoading(false);
         }
-    }, [post.id, post.authorId, user.id, user.isAuthenticated]);
+    }, [initialConversation, post, user.id, user.isAuthenticated]);
 
     useEffect(() => { loadConversation(); }, [loadConversation]);
     useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
@@ -90,7 +115,21 @@ export default function ChatDrawer({ post, onClose }) {
 
     function handleKeyDown(e) { if (e.key === "Enter" && !e.shiftKey) handleSend(e); }
 
-    const otherName = post.authorName || "Post Owner";
+    // Find the other participant's display name for header
+    let otherName = "Chat";
+    const otherMsg = messages.find((m) => m.sender_id !== user.id);
+    if (otherMsg && otherMsg.sender_name) {
+        otherName = otherMsg.sender_name;
+    } else if (initialConversation?.otherName) {
+        otherName = initialConversation.otherName;
+    } else if (post?.authorName && user.id !== post?.authorId) {
+        otherName = post.authorName;
+    } else if (post?.authorName) {
+        otherName = "User";
+    }
+
+    const postTitle = post?.title || conversation?.postTitle || "Post";
+    const postType = post?.type || conversation?.postType || "lost";
 
     return (
         <>
@@ -98,18 +137,18 @@ export default function ChatDrawer({ post, onClose }) {
             <aside className="chat-drawer" role="dialog" aria-label="Chat" aria-modal="true">
                 <div className="chat-drawer-header">
                     <div className="chat-drawer-header-info">
-                        <div className="chat-drawer-title">💬 {otherName}</div>
+                        <div className="chat-drawer-title">💬 Chat with {otherName}</div>
                         <div className="chat-drawer-subtitle">
-                            <span className={`type-badge type-badge--${post.type}`} style={{ fontSize: "11px", padding: "2px 8px" }}>
-                                {post.type === "lost" ? "🔴 LOST" : "🟢 FOUND"}
+                            <span className={`type-badge type-badge--${postType}`} style={{ fontSize: "11px", padding: "2px 8px" }}>
+                                {postType === "lost" ? "🔴 LOST" : "🟢 FOUND"}
                             </span>
-                            <span>{post.title}</span>
+                            <span>{postTitle}</span>
                         </div>
                     </div>
                     <button className="chat-close-btn" onClick={onClose} aria-label="Close chat" type="button">✕</button>
                 </div>
                 <div className="chat-notice">
-                    🔒 Private conversation — only you and the other party can see this. Share proof of ownership to verify your claim.
+                    🔒 Private 2-way conversation — only you and the other party can see this.
                 </div>
                 <div className="chat-messages">
                     {loading && <div className="chat-loading"><div className="chat-loading-spinner" /><span>Loading conversation…</span></div>}
@@ -118,7 +157,7 @@ export default function ChatDrawer({ post, onClose }) {
                         <div className="chat-empty-state">
                             <div className="chat-empty-icon">💌</div>
                             <p>No messages yet.</p>
-                            <p className="chat-empty-hint">Introduce yourself and describe how you can prove ownership of the item.</p>
+                            <p className="chat-empty-hint">Start the private conversation with {otherName}.</p>
                         </div>
                     )}
                     {!loading && !error && messages.map((msg, i) => {
