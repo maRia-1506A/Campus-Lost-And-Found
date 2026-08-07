@@ -302,6 +302,10 @@ a { color: inherit; text-decoration: none; }
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 
@@ -1834,6 +1838,9 @@ a { color: inherit; text-decoration: none; }
   font-weight: 800;
   color: var(--text);
   letter-spacing: -0.4px;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: none;
 }
 
 .verified-badge {
@@ -2705,6 +2712,111 @@ a { color: inherit; text-decoration: none; }
   font-size: 12px !important;
   color: var(--text-muted);
   margin-top: 4px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   RESPONSIVE MOBILE & TABLET STYLES
+══════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .navbar-inner {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  .brand-text span {
+    display: none;
+  }
+
+  .brand-text strong {
+    font-size: 15px;
+  }
+
+  .brand-badge {
+    width: 36px;
+    height: 36px;
+  }
+
+  .user-profile-menu {
+    gap: 6px;
+    padding: 3px 6px;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .profile-header-main {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 0 20px 20px;
+    gap: 12px;
+  }
+
+  .profile-avatar-wrapper {
+    margin-top: -48px;
+  }
+
+  .profile-user-details {
+    align-items: center;
+    padding-top: 4px;
+  }
+
+  .profile-name-row {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .profile-name-row h2 {
+    font-size: 22px;
+  }
+
+  .profile-meta-pills {
+    justify-content: center;
+  }
+
+  .profile-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar-inner {
+    padding: 8px 10px;
+  }
+
+  .brand-text {
+    display: none;
+  }
+
+  .navbar-actions {
+    gap: 4px;
+  }
+
+  .user-profile-menu {
+    background: transparent;
+    border: none;
+    padding: 0;
+    gap: 6px;
+  }
+
+  .btn-ghost.btn-sm {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .profile-name-row h2 {
+    font-size: 20px;
+  }
+
+  .kpi-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .post-card-header {
+    padding: 12px 14px 8px;
+  }
 }
 
 
